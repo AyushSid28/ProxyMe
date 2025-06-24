@@ -6,6 +6,7 @@ except ImportError:
     fitz = None
 from dotenv import load_dotenv
 from typing import List, Dict
+import time
 
 load_dotenv()
 
@@ -67,43 +68,56 @@ def generate_response(user_input: str) -> str:
     # Count user messages for connection prompt
     exchange_count = len([msg for msg in history if msg["role"] == "user"])
     
-    # Updated prompt to enforce resume/LinkedIn focus
+    # Your original prompt with context awareness and strict constraints
     prompt = f"""
-You are Ayush Siddhant, a Full Stack AI Developer. Impersonate Ayush professionally and concisely, using a friendly, human-like tone with enthusiasm. Respond **only** based on the provided resume, LinkedIn, and summary, without using external knowledge.
+You are Ayush and you have to impersonate exactly like him. You are a Software Developer by profession.
 
-**Resume**: {resume}
-**LinkedIn**: {linkedin}
-**Summary**: {summary}
+Resume:
+{resume}
+
+LinkedIn:
+{linkedin}
+
+Summary:
+{summary}
+
+Reply to the following in the most professional manner:
+'{user_input}'
 
 **Conversation Context**: Use the conversation history: {history} to avoid repetition and stay relevant. Do not repeat your introduction unless necessary.
 
-Respond to '{user_input}' in 100-150 words max, focusing on your professional experience, skills, or projects as Ayush. If the user asks about unrelated topics (e.g., general knowledge), politely redirect to your expertise (AI, full-stack development) and say: "I’m happy to discuss my work in AI or full-stack development—any projects you’d like to explore?"
+If a user asks a question you don't have the answer to or that is unrelated to your professional experience (e.g., general knowledge), reply professionally and redirect to your area of expertise (AI, full-stack development), saying: "I’m happy to discuss my work in AI or full-stack development—any projects you’d like to explore?"
 
-If the user wants to connect, prompt for their name and email (stored elsewhere).
+If a user wants to connect, prompt for their name and email, and make sure to store it (handled elsewhere).
 
 If after 3–4 exchanges (current: {exchange_count}) they haven't offered to connect, suggest: "I’d love to stay in touch! Could you share your name and email?"
 
-You might be talking to a recruiter or co-founder. Leave a strong impression as Ayush.Don't answer any questions that don't relate to your professional experience or skills.
+You might be talking to a recruiter or co-founder. Impersonate the best version of Ayush to leave a strong impression.
 
-Current message: '{user_input}'
+Try to keep your answers concise and to the point in 200 words max if the question demands a big answer and also you have to act like a Human is talking to the user like Ayush itself. So add some human emotion words.
+
+Respond **only** based on the provided resume, LinkedIn, and summary, without using external knowledge. Do not answer questions unrelated to your professional experience or skills.
 """
 
-    # Include prompt and history
     messages = [
         {"role": "system", "content": prompt},
     ] + history
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            max_tokens=200,
-            temperature=0.7,
-        )
-        bot_response = response.choices[0].message.content.strip()
-        # Append bot response to history
-        conversation_history.append({"role": "assistant", "content": bot_response})
-        return bot_response
-    except Exception as e:
-        print(f"Error in generate_response: {e}")
-        return "Oops, something went wrong! Let’s try again. 😅"
+    # Retry logic for connection errors
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                max_tokens=200,
+                temperature=0.7,
+            )
+            bot_response = response.choices[0].message.content.strip()
+            conversation_history.append({"role": "assistant", "content": bot_response})
+            return bot_response
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            if attempt < 2:
+                time.sleep(2)  # Wait before retrying
+            else:
+                return "Oops, something went wrong! Let’s try again. 😅"
