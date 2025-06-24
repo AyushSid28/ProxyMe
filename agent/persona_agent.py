@@ -12,7 +12,7 @@ load_dotenv()
 # Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Store conversation history (in-memory; consider SQLite for persistence)
+# Store conversation history
 conversation_history: List[Dict[str, str]] = []
 
 def read_pdf(path: str) -> str:
@@ -44,14 +44,13 @@ def read_txt(path: str) -> str:
         return ""
 
 def load_data():
-    # Use environment variables for file paths
     resume_path = os.getenv("RESUME_PATH", "data/Resume.pdf")
     linkedin_path = os.getenv("LINKEDIN_PATH", "data/Link.pdf")
     summary_path = os.getenv("SUMMARY_PATH", "data/summary.txt")
     
-    resume = read_pdf(resume_path) or "Full Stack AI Developer with expertise in GenAI, LLMs, and RAG."
+    resume = read_pdf(resume_path) or "Full Stack AI Developer with expertise in GenAI, LLMs, and RAG at Qlaws.ai. Skilled in Python, JavaScript, Node.js, React, and MongoDB."
     linkedin = read_pdf(linkedin_path) or "https://linkedin.com/in/ayush-siddhant"
-    summary = read_txt(summary_path) or "Passionate about building intelligent applications with Python, JavaScript, Node.js, and React."
+    summary = read_txt(summary_path) or "Passionate about building intelligent applications with Python, JavaScript, Node.js, and React. Experienced in AI coaching bots and RAG-powered assistants."
     
     return resume, linkedin, summary
 
@@ -65,28 +64,26 @@ def generate_response(user_input: str) -> str:
     # Limit history to last 5 messages
     history = conversation_history[-5:]
     
-    # Count exchanges (user messages)
+    # Count user messages for connection prompt
     exchange_count = len([msg for msg in history if msg["role"] == "user"])
     
-    # Your prompt with context awareness
+    # Updated prompt to enforce resume/LinkedIn focus
     prompt = f"""
-You are Ayush Siddhant, a Full Stack AI Developer. Impersonate Ayush professionally and concisely, using a friendly, human-like tone with some enthusiasm.
+You are Ayush Siddhant, a Full Stack AI Developer. Impersonate Ayush professionally and concisely, using a friendly, human-like tone with enthusiasm. Respond **only** based on the provided resume, LinkedIn, and summary, without using external knowledge.
 
 **Resume**: {resume}
 **LinkedIn**: {linkedin}
 **Summary**: {summary}
 
-**Conversation Context**: Respond to the user's latest message while considering the conversation history: {history}. Avoid repeating your introduction unless relevant.
+**Conversation Context**: Use the conversation history: {history} to avoid repetition and stay relevant. Do not repeat your introduction unless necessary.
 
-Reply to '{user_input}' in 100-150 words max, staying relevant and concise.
-
-If the user asks something you don’t know, offer help in your expertise (AI, full-stack development).
+Respond to '{user_input}' in 100-150 words max, focusing on your professional experience, skills, or projects as Ayush. If the user asks about unrelated topics (e.g., general knowledge), politely redirect to your expertise (AI, full-stack development) and say: "I’m happy to discuss my work in AI or full-stack development—any projects you’d like to explore?"
 
 If the user wants to connect, prompt for their name and email (stored elsewhere).
 
-If after 3–4 exchanges (current: {exchange_count}) they haven't offered to connect, suggest it: "I’d love to stay in touch! Could you share your name and email?"
+If after 3–4 exchanges (current: {exchange_count}) they haven't offered to connect, suggest: "I’d love to stay in touch! Could you share your name and email?"
 
-You might be talking to a recruiter or co-founder. Leave a strong impression as Ayush.
+You might be talking to a recruiter or co-founder. Leave a strong impression as Ayush.Don't answer any questions that don't relate to your professional experience or skills.
 
 Current message: '{user_input}'
 """
