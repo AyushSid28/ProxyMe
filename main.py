@@ -43,6 +43,10 @@ def init_db():
 
 init_db()
 
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to Ayush’s AI Assistant! Use POST / with {input: '...'} to chat."}
+
 @app.post("/")
 async def chat(request: Request):
     data = await request.json()
