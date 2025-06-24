@@ -9,7 +9,6 @@ import os
 
 app = FastAPI()
 
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
@@ -17,7 +16,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 def init_db():
     os.makedirs("data", exist_ok=True)
@@ -45,11 +43,15 @@ def init_db():
 
 init_db()
 
-@app.post("/chat")
+@app.post("/")
 async def chat(request: Request):
     data = await request.json()
     user_input = data.get("input", "")
-    response = generate_response(user_input)
+    try:
+        response = generate_response(user_input)
+    except Exception as e:
+        print(f"Error in generate_response: {e}")
+        return {"response": "Error: Try again later"}
 
     conn = sqlite3.connect("data/leads.db")
     c = conn.cursor()

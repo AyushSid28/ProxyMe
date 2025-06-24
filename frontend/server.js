@@ -9,7 +9,7 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Serve the index.ejs with a dynamic API URL
 app.get('/', (req, res) => {
-  const apiUrl = process.env.VITE_API_URL || 'http://localhost:8001/chat';
+  const apiUrl = process.env.VITE_API_URL || 'http://localhost:8001/';
   res.render('index', { apiUrl });
 });
 
