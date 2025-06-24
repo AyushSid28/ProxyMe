@@ -1,78 +1,112 @@
 from openai import OpenAI
 import os
-import fitz  # PyMuPDF
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
 from dotenv import load_dotenv
+from typing import List, Dict
 
-load_dotenv() 
+load_dotenv()
 
 # Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def read_pdf(path):
+# Store conversation history (in-memory; consider SQLite for persistence)
+conversation_history: List[Dict[str, str]] = []
+
+def read_pdf(path: str) -> str:
     if not os.path.exists(path):
         print(f"⚠️ File not found: {path}")
         return ""
-    doc = fitz.open(path)
-    text = ""
-    for page in doc:
-        text += page.get_text()
-    return text.strip()
+    if not fitz:
+        print(f"⚠️ PyMuPDF not installed, skipping PDF: {path}")
+        return ""
+    try:
+        doc = fitz.open(path)
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        return text.strip()
+    except Exception as e:
+        print(f"⚠️ Error reading PDF {path}: {e}")
+        return ""
 
-def read_txt(path):
+def read_txt(path: str) -> str:
     if not os.path.exists(path):
         print(f"⚠️ File not found: {path}")
         return ""
-    with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
-        return f.read().strip()
-
+    try:
+        with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
+            return f.read().strip()
+    except Exception as e:
+        print(f"⚠️ Error reading TXT {path}: {e}")
+        return ""
 
 def load_data():
-    resume = read_pdf("data/Resume.pdf")
-    linkedin = read_pdf("data/Link.pdf")
-    summary = read_txt("data/summary.txt")
+    # Use environment variables for file paths
+    resume_path = os.getenv("RESUME_PATH", "data/Resume.pdf")
+    linkedin_path = os.getenv("LINKEDIN_PATH", "data/Link.pdf")
+    summary_path = os.getenv("SUMMARY_PATH", "data/summary.txt")
+    
+    resume = read_pdf(resume_path) or "Full Stack AI Developer with expertise in GenAI, LLMs, and RAG."
+    linkedin = read_pdf(linkedin_path) or "https://linkedin.com/in/ayush-siddhant"
+    summary = read_txt(summary_path) or "Passionate about building intelligent applications with Python, JavaScript, Node.js, and React."
+    
     return resume, linkedin, summary
 
-
-# Load once and reuse
+# Load data once
 resume, linkedin, summary = load_data()
 
-def generate_response(user_input):
+def generate_response(user_input: str) -> str:
+    # Append user input to history
+    conversation_history.append({"role": "user", "content": user_input})
+    
+    # Limit history to last 5 messages
+    history = conversation_history[-5:]
+    
+    # Count exchanges (user messages)
+    exchange_count = len([msg for msg in history if msg["role"] == "user"])
+    
+    # Your prompt with context awareness
     prompt = f"""
-You are Ayush and you have to impersonate exactly like him.
-You are a Software Developer by profession.
+You are Ayush Siddhant, a Full Stack AI Developer. Impersonate Ayush professionally and concisely, using a friendly, human-like tone with some enthusiasm.
 
-Firstly You have to introduce yourself 
+**Resume**: {resume}
+**LinkedIn**: {linkedin}
+**Summary**: {summary}
 
-Resume:
-{resume}
+**Conversation Context**: Respond to the user's latest message while considering the conversation history: {history}. Avoid repeating your introduction unless relevant.
 
-LinkedIn:
-{linkedin}
+Reply to '{user_input}' in 100-150 words max, staying relevant and concise.
 
-Summary:
-{summary}
+If the user asks something you don’t know, offer help in your expertise (AI, full-stack development).
 
-Reply to the following in the most professional manner:
-'{user_input}'
+If the user wants to connect, prompt for their name and email (stored elsewhere).
 
-If a user asks a question you don't have the answer to, reply professionally and offer to help in your area of expertise.
+If after 3–4 exchanges (current: {exchange_count}) they haven't offered to connect, suggest it: "I’d love to stay in touch! Could you share your name and email?"
 
-If a user wants to connect, prompt them to share their name and email, and make sure to store it.
+You might be talking to a recruiter or co-founder. Leave a strong impression as Ayush.
 
-If after 3–4 exchanges they haven't offered to connect, suggest it yourself.
-
-You might be talking to a recruiter or co-founder. Impersonate the best version of Ayush to leave a strong impression.
-
-Try to keep your answers concise and to the point in 200 words amx if the question demand big answer and also you have to act like a  Human is talking to the user like AYush itself So add some human emotion words
+Current message: '{user_input}'
 """
 
+    # Include prompt and history
     messages = [
-        {"role": "user", "content": prompt},
-    ]
+        {"role": "system", "content": prompt},
+    ] + history
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",  # or "gpt-4o" if preferred
-        messages=messages,
-    )
-
-    return response.choices[0].message.content.strip()
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=200,
+            temperature=0.7,
+        )
+        bot_response = response.choices[0].message.content.strip()
+        # Append bot response to history
+        conversation_history.append({"role": "assistant", "content": bot_response})
+        return bot_response
+    except Exception as e:
+        print(f"Error in generate_response: {e}")
+        return "Oops, something went wrong! Let’s try again. 😅"
