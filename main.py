@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
 import os
 import logging
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# In-memory session store (keyed by client IP for simplicity)
+session_leads = defaultdict(lambda: {"name": "", "email": ""})
 
 def init_db():
     os.makedirs("data", exist_ok=True)
@@ -59,7 +63,8 @@ async def read_root(request: Request):
 async def chat(request: Request):
     data = await request.json()
     user_input = data.get("input", "")
-    logger.info(f"Received input: {user_input}")
+    client_ip = request.client.host  # Simple session ID using IP
+    logger.info(f"Received input from {client_ip}: {user_input}")
     try:
         response = generate_response(user_input)
     except Exception as e:
@@ -73,17 +78,24 @@ async def chat(request: Request):
               (user_input, response))
     logger.info("Message stored")
 
+    # Extract lead from current input
     lead = extract_lead(user_input)
-    logger.debug(f"Extracted lead: {lead}")
-    if lead["name"] and lead["email"]:
+    logger.debug(f"Extracted lead from input: {lead}")
+
+    # Update session lead with current input
+    session_leads[client_ip]["name"] = lead["name"] if lead["name"] else session_leads[client_ip]["name"]
+    session_leads[client_ip]["email"] = lead["email"] if lead["email"] else session_leads[client_ip]["email"]
+
+    # Check if we have a complete lead from session data
+    if session_leads[client_ip]["name"] and session_leads[client_ip]["email"]:
         c.execute("INSERT INTO leads(name, email, intent, timestamp) VALUES (?, ?, ?, datetime('now'))",
-                  (lead["name"], lead["email"], lead["intent"]))
+                  (session_leads[client_ip]["name"], session_leads[client_ip]["email"], "Inquiry"))
         conn.commit()
-        logger.info(f"Lead detected: {lead['name']}, {lead['email']}")
-        send_notification(lead["name"], lead["email"], lead["intent"])
+        logger.info(f"Lead detected from session {client_ip}: {session_leads[client_ip]['name']}, {session_leads[client_ip]['email']}")
+        send_notification(session_leads[client_ip]["name"], session_leads[client_ip]["email"], "Inquiry")
         logger.info("Notification attempt completed")
     else:
-        logger.warning(f"No valid lead detected from input: {user_input}")
+        logger.debug(f"Partial lead in session {client_ip}: {session_leads[client_ip]}")
 
     if os.getenv("USE_EVALUATOR", "false").lower() == "true":
         eval_score = evaluate_response(user_input, response)
