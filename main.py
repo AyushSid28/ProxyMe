@@ -14,13 +14,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Configure templates and static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,11 +59,11 @@ async def read_root(request: Request):
 async def chat(request: Request):
     data = await request.json()
     user_input = data.get("input", "")
-    logger.info(f"Processing input: {user_input}")
+    logger.info(f"Received input: {user_input}")
     try:
         response = generate_response(user_input)
     except Exception as e:
-        logger.error(f"Error in generate_response: {e}")
+        logger.error(f"generate_response error: {e}")
         return {"response": "Error: Try again later"}
 
     conn = sqlite3.connect("data/leads.db")
@@ -80,8 +79,11 @@ async def chat(request: Request):
         c.execute("INSERT INTO leads(name, email, intent, timestamp) VALUES (?, ?, ?, datetime('now'))",
                   (lead["name"], lead["email"], lead["intent"]))
         conn.commit()
-        logger.info(f"Lead detected, sending notification for {lead['name']}")
+        logger.info(f"Lead detected: {lead['name']}, {lead['email']}")
         send_notification(lead["name"], lead["email"], lead["intent"])
+        logger.info("Notification attempt completed")
+    else:
+        logger.warning("No valid lead detected")
 
     if os.getenv("USE_EVALUATOR", "false").lower() == "true":
         eval_score = evaluate_response(user_input, response)
@@ -95,5 +97,6 @@ async def chat(request: Request):
 @app.get("/test-notification")
 async def test_notification():
     from collector.push_notify import send_notification
-    send_notification("Test", "test@example.com", "Test Intent")
+    logger.info("Testing Pushover notification")
+    send_notification("Test User", "test@example.com", "Test Intent")
     return {"message": "Notification test triggered"}
