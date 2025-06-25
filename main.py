@@ -19,7 +19,7 @@ templates = Jinja2Templates(directory="templates")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -83,7 +83,7 @@ async def chat(request: Request):
         send_notification(lead["name"], lead["email"], lead["intent"])
         logger.info("Notification attempt completed")
     else:
-        logger.warning("No valid lead detected")
+        logger.warning(f"No valid lead detected from input: {user_input}")
 
     if os.getenv("USE_EVALUATOR", "false").lower() == "true":
         eval_score = evaluate_response(user_input, response)
