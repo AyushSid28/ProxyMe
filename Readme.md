@@ -19,16 +19,3 @@ Setup:
 
    Run the Fast API server:
       uvicorn main:app --reload  --port 8001
-
-
-2.Frontend Setup:
-   cd frontend
-
-   Install dependencies:
-      npm init -y
-      npm install express
-
-
-   Start the Node.js server:
-
-      node server.js   
