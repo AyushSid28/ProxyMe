@@ -91,3 +91,9 @@ async def chat(request: Request):
     conn.commit()
     conn.close()
     return {"response": response}
+
+@app.get("/test-notification")
+async def test_notification():
+    from collector.push_notify import send_notification
+    send_notification("Test", "test@example.com", "Test Intent")
+    return {"message": "Notification test triggered"}
